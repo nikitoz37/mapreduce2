@@ -1,0 +1,107 @@
+version: '3.8'
+
+
+secrets:
+  postgres_user:
+    file: ./secrets/postgres_user.txt
+  postgres_password:
+    file: ./secrets/postgres_password.txt
+
+
+services:
+  master:
+    container_name: master
+    restart: unless-stopped
+    build: ./master
+    links:
+      - postgres:postgres
+    secrets:
+      - postgres_user
+      - postgres_password
+    environment:
+      DEBUG: False
+      POSTGRES_DB: top_words_db
+      DATABASE_PORT: 5432
+      POSTGRES_USER_FILE: /run/secrets/postgres_user
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    expose:
+      - "8000"
+    depends_on:
+      - postgres
+    command: >
+      sh -c "gunicorn -w 2 -b :8000 app:app"
+    networks:
+      - mapreduce-network
+
+
+  postgres:
+    restart: unless-stopped
+    image: postgres:latest
+    secrets:
+      - postgres_user
+      - postgres_password
+    environment:
+      POSTGRES_DB: top_words_db
+      POSTGRES_USER_FILE: /run/secrets/postgres_user
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      PGDATA: "/var/lib/postgresql/data/pgdata"
+    volumes:
+      #- db-data:/var/lib/postgresql/data
+      - db-data:/var/lib/postgresql
+      #- ../2. Init Database:/docker-entrypoint-initdb.d
+      #/path/to/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - /db/init.sql:/docker-entrypoint-initdb.d/init.sql
+    expose:
+      - "5432"
+    networks:
+      - mapreduce-network
+
+
+  #pgadmin:
+  #  image: dpage/pgadmin4:latest
+  #  environment:
+  #    PGADMIN_DEFAULT_EMAIL: "admin@ya.ru"
+  #    PGADMIN_DEFAULT_PASSWORD: "123"
+  #    PGADMIN_CONFIG_SERVER_MODE: "False"
+  #  volumes:
+  #    - pgadmin-data:/var/lib/pgadmin
+  #  ports:
+  #    - "6001:6001"
+  #  restart: unless-stopped
+  #  deploy:
+  #    resources:
+  #      limits:
+  #        cpus: '0.5'
+  #        memory: 1G
+  #  networks:
+  #    - mapreduce-network
+
+
+  nginx:
+    container_name: nginx
+    restart: unless-stopped
+    build: ./nginx
+    ports:
+      - "80:80"
+    #volumes:
+    #  - ./web/static:/static
+    links:
+      - master:master
+    depends_on:
+      - master
+    networks:
+      - mapreduce-network
+
+
+volumes:
+  db-data:
+  #pgadmin-data:  
+
+
+networks:
+  mapreduce-network:
+    driver: bridge
+
+
+
+
